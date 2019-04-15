@@ -45,7 +45,6 @@ using namespace epee;
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
-#include "difficulty.h"
 #include "ringct/rctSigs.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -132,7 +131,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool expand_transaction_1(transaction &tx, bool base_only)
   {
-    if (tx.version >= 2 && !is_coinbase(tx))
+    if (tx.version >= 1 && !is_coinbase(tx))
     {
       rct::rctSig &rv = tx.rct_signatures;
       if (rv.outPk.size() != tx.vout.size())
@@ -152,19 +151,30 @@ namespace cryptonote
 
       if (!base_only)
       {
-        const bool bulletproof = rv.type == rct::RCTTypeFullBulletproof || rv.type == rct::RCTTypeSimpleBulletproof;
+        const bool bulletproof = rct::is_rct_bulletproof(rv.type);
         if (bulletproof)
         {
-          if (rv.p.bulletproofs.size() != tx.vout.size())
+          if (rv.p.bulletproofs.size() != 1)
           {
             LOG_PRINT_L1("Failed to parse transaction from blob, bad bulletproofs size in tx " << get_transaction_hash(tx));
             return false;
           }
-          for (size_t n = 0; n < rv.outPk.size(); ++n)
+          if (rv.p.bulletproofs[0].L.size() < 6)
           {
-            rv.p.bulletproofs[n].V.resize(1);
-            rv.p.bulletproofs[n].V[0] = rv.outPk[n].mask;
+            LOG_PRINT_L1("Failed to parse transaction from blob, bad bulletproofs L size in tx " << get_transaction_hash(tx));
+            return false;
           }
+          const size_t max_outputs = 1 << (rv.p.bulletproofs[0].L.size() - 6);
+          if (max_outputs < tx.vout.size())
+          {
+            LOG_PRINT_L1("Failed to parse transaction from blob, bad bulletproofs max outputs in tx " << get_transaction_hash(tx));
+            return false;
+          }
+          const size_t n_amounts = tx.vout.size();
+          CHECK_AND_ASSERT_MES(n_amounts == rv.outPk.size(), false, "Internal error filling out V");
+          rv.p.bulletproofs[0].V.resize(n_amounts);
+          for (size_t i = 0; i < n_amounts; ++i)
+            rv.p.bulletproofs[0].V[i] = rct::scalarmultKey(rv.outPk[i].mask, rct::INV_EIGHT);
         }
       }
     }
@@ -214,25 +224,15 @@ namespace cryptonote
   {
     crypto::key_derivation recv_derivation = AUTO_VAL_INIT(recv_derivation);
     bool r = hwdev.generate_key_derivation(tx_public_key, ack.m_view_secret_key, recv_derivation);
-    if (!r)
-    {
-      MWARNING("key image helper: failed to generate_key_derivation(" << tx_public_key << ", " << ack.m_view_secret_key << ")");
-      memcpy(&recv_derivation, rct::identity().bytes, sizeof(recv_derivation));
-    }
+    CHECK_AND_ASSERT_MES(r, false, "key image helper: failed to generate_key_derivation(" << tx_public_key << ", " << ack.m_view_secret_key << ")");
 
     std::vector<crypto::key_derivation> additional_recv_derivations;
     for (size_t i = 0; i < additional_tx_public_keys.size(); ++i)
     {
       crypto::key_derivation additional_recv_derivation = AUTO_VAL_INIT(additional_recv_derivation);
       r = hwdev.generate_key_derivation(additional_tx_public_keys[i], ack.m_view_secret_key, additional_recv_derivation);
-      if (!r)
-      {
-        MWARNING("key image helper: failed to generate_key_derivation(" << additional_tx_public_keys[i] << ", " << ack.m_view_secret_key << ")");
-      }
-      else
-      {
-        additional_recv_derivations.push_back(additional_recv_derivation);
-      }
+      CHECK_AND_ASSERT_MES(r, false, "key image helper: failed to generate_key_derivation(" << additional_tx_public_keys[i] << ", " << ack.m_view_secret_key << ")");
+      additional_recv_derivations.push_back(additional_recv_derivation);
     }
 
     boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, real_output_index,hwdev);
@@ -358,6 +358,8 @@ namespace cryptonote
 
     CHECK_AND_ASSERT_MES(amount_in >= amount_out, false, "transaction spend (" <<amount_in << ") more than it has (" << amount_out << ")");
     fee = amount_in - amount_out;
+
+    fee = tx.rct_signatures.txnFee;
     return true;
   }
   //---------------------------------------------------------------

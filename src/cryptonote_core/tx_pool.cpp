@@ -1098,6 +1098,16 @@ namespace cryptonote
           continue;
         }
       }
+      else
+      {
+        // If we've exceeded the penalty free size,
+        // stop including more tx
+        if (total_size > median_size)
+        {
+          LOG_PRINT_L2("  would exceed median block size");
+          break;
+        }
+      }
 
       cryptonote::blobdata txblob = m_blockchain.get_txpool_tx_blob(sorted_it->second);
       cryptonote::transaction tx;

@@ -1,5 +1,6 @@
 // Copyright (c) 2018, Blur Network
 // Copyright (c) 2017-2018, The NERVA Project
+// Copyright (c) 2017-2018, The Masari Project
 // Copyright (c) 2014-2018, The Monero Project
 //
 // All rights reserved.
@@ -120,8 +121,6 @@
 #define P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT            5000       //5 seconds
 #define P2P_DEFAULT_WHITELIST_CONNECTIONS_PERCENT       70
 #define P2P_DEFAULT_ANCHOR_CONNECTIONS_COUNT            2
-#define P2P_DEFAULT_LIMIT_RATE_UP                       2048       // kB/s
-#define P2P_DEFAULT_LIMIT_RATE_DOWN                     8192       // kB/s
 
 #define P2P_FAILED_ADDR_FORGET_SECONDS                  (60*60)     //1 hour
 #define P2P_IP_BLOCKTIME                                (60*60*24)  //24 hour
@@ -145,6 +144,8 @@
 #define HASH_OF_HASHES_STEP                     256
 
 #define DEFAULT_TXPOOL_MAX_SIZE                 648000000ull // 3 days at 300000, in bytes
+
+#define BULLETPROOF_MAX_OUTPUTS                 16
 
 // New constants are intended to go here
 namespace config
@@ -191,8 +192,6 @@ namespace config
       } }; // Lucid Deja-Vu
   }
 }
-
-
 
 namespace cryptonote
 {

@@ -108,14 +108,6 @@ typedef cryptonote::simple_wallet sw;
     m_auto_refresh_enabled.store(auto_refresh_enabled, std::memory_order_relaxed); \
   })
 
-#define LONG_PAYMENT_ID_SUPPORT_CHECK() \
-  do { \
-    if (!m_long_payment_id_support) { \
-      fail_msg_writer() << tr("Long payment IDs are obsolete. Use --long-payment-id-support if you really must use one, and warn the recipient they are using an obsolete feature that will disappear in the future."); \
-      return true; \
-    } \
-  } while(0)
-
 enum TransferType {
   Transfer,
   TransferLocked,
@@ -726,7 +718,10 @@ bool simple_wallet::change_password(const std::vector<std::string> &args)
 
 bool simple_wallet::payment_id(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
-  LONG_PAYMENT_ID_SUPPORT_CHECK();
+
+  if (!m_long_payment_id_support) {
+    fail_msg_writer() << tr("Long payment IDs are obsolete. Use --long-payment-id-support if you really must use one, and warn the recipient they are using an obsolete feature that will disappear in the future.");
+    return true; }
 
   crypto::hash payment_id;
   if (args.size() > 0)
@@ -1700,7 +1695,9 @@ bool simple_wallet::set_refresh_type(const std::vector<std::string> &args/* = st
 
 bool simple_wallet::set_confirm_missing_payment_id(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
-  LONG_PAYMENT_ID_SUPPORT_CHECK();
+    if (!m_long_payment_id_support) {
+      fail_msg_writer() << tr("Long payment IDs are obsolete. Use --long-payment-id-support if you really must use one, and warn the recipient they are using an obsolete feature that will disappear in the future.");
+      return true; }
 
   const auto pwd_container = get_and_verify_password();
   if (pwd_container)
@@ -1993,11 +1990,11 @@ simple_wallet::simple_wallet()
                            tr("Show the blockchain height."));
   m_cmd_binder.set_handler("transfer", boost::bind(&simple_wallet::transfer, this, _1),
                            tr("transfer [index=<N1>[,<N2>,...]] [<priority>] <address> <amount> [<payment_id>]"),
-  tr("Transfer <amount> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
+                           tr("Transfer <amount> to <address>. If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: low, medium, high. If omitted, the default value (see the command \"set priority\") is used. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
   m_cmd_binder.set_handler("locked_transfer",
                            boost::bind(&simple_wallet::locked_transfer, this, _1),
                            tr("locked_transfer [index=<N1>[,<N2>,...]] [<priority>] <addr> <amount> <lockblocks> [<payment_id>]"),
-                          tr("Transfer <amount> to <address> and lock it for <lockblocks> (max. 1000000). If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: low, medium, high, priority. If omitted, the default value (see the command \"set priority\") is used. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
+                           tr("Transfer <amount> to <address> and lock it for <lockblocks> (max. 1000000). If the parameter \"index=<N1>[,<N2>,...]\" is specified, the wallet uses outputs received by addresses of those indices. If omitted, the wallet randomly chooses address indices to be used. In any case, it tries its best not to combine outputs across multiple addresses. <priority> is the priority of the transaction. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: low, medium, high. If omitted, the default value (see the command \"set priority\") is used. Multiple payments can be made at once by adding <address_2> <amount_2> etcetera (before the payment ID, if it's included)"));
   m_cmd_binder.set_handler("sweep_all", boost::bind(&simple_wallet::sweep_all, this, _1),
                            tr("sweep_all [index=<N1>[,<N2>,...]] [<priority>] <address> [<payment_id>]"),
                            tr("Send all unlocked balance to an address. If the parameter \"index<N1>[,<N2>,...]\" is specified, the wallet sweeps outputs received by those address indices. If omitted, the wallet randomly chooses an address index to be used."));
@@ -2009,10 +2006,6 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::sweep_single, this, _1),
                            tr("sweep_single [<priority>] <key_image> <address> [<payment_id>]"),
                            tr("Send a single output of the given key image to an address without change."));
-  m_cmd_binder.set_handler("donate",
-                           boost::bind(&simple_wallet::donate, this, _1),
-                           tr("donate [index=<N1>[,<N2>,...]] [<priority>] <amount> [<payment_id>]"),
-                           tr("Donate <amount> to the development team ."));
   m_cmd_binder.set_handler("sign_transfer",
                            boost::bind(&simple_wallet::sign_transfer, this, _1),
                            tr("sign_transfer <file>"),
@@ -4536,8 +4529,10 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
         }
 
         std::stringstream prompt;
+        uint64_t tx_size = 0;
         for (size_t n = 0; n < ptx_vector.size(); ++n)
         {
+          tx_size += cryptonote::tx_to_blob(ptx_vector[n].tx).size();
           prompt << tr("\nTransaction ") << (n + 1) << "/" << ptx_vector.size() << ":\n";
           subaddr_indices.clear();
           for (uint32_t i : ptx_vector[n].construction_data.subaddr_indices)
@@ -4551,13 +4546,13 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
         if (ptx_vector.size() > 1)
         {
           prompt << boost::format(tr("Your transaction needs to be split into %llu transactions.  "
-            "This will result in a transaction fee being applied to each transaction, for a total fee of %s")) %
-            ((unsigned long long)ptx_vector.size()) % print_money(total_fee);
+            "This will result in a transaction fee being applied to each transaction, for a total fee of %s (total transaction size %d bytes)")) %
+            ((unsigned long long)ptx_vector.size()) % print_money(total_fee) % tx_size;
         }
         else
         {
-          prompt << boost::format(tr("The transaction fee is %s")) %
-            print_money(total_fee);
+          prompt << boost::format(tr("The transaction fee is %s (transaction size %d bytes)")) %
+            print_money(total_fee) % tx_size;
         }
         if (transfer_type == TransferLocked)
         {
@@ -5054,44 +5049,6 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
     return true;
   }
   return sweep_main(below, std::vector<std::string>(++args_.begin(), args_.end()));
-}
-//----------------------------------------------------------------------------------------------------
-bool simple_wallet::donate(const std::vector<std::string> &args_)
-{
-  if(m_wallet->nettype() != cryptonote::MAINNET)
-  {
-    fail_msg_writer() << tr("donations are not enabled on the testnet or on the stagenet");
-    return true;
-  }
-
-  std::vector<std::string> local_args = args_;
-  if(local_args.empty() || local_args.size() > 4)
-  {
-     fail_msg_writer() << tr("usage: donate [index=<N1>[,<N2>,...]] [<priority>] <amount> [<payment_id>]");
-     return true;
-  }
-  std::string amount_str;
-  std::string payment_id_str;
-  // get payment id and pop
-  crypto::hash payment_id;
-  crypto::hash8 payment_id8;
-  if (tools::wallet2::parse_long_payment_id (local_args.back(), payment_id ) ||
-      tools::wallet2::parse_short_payment_id(local_args.back(), payment_id8))
-  {
-    payment_id_str = local_args.back();
-    local_args.pop_back();
-  }
-  // get amount and pop
-  amount_str = local_args.back();
-  local_args.pop_back();
-  // push back address, amount, payment id
-  local_args.push_back(BLUR_DONATION_ADDR);
-  local_args.push_back(amount_str);
-  if (!payment_id_str.empty())
-    local_args.push_back(payment_id_str);
-  message_writer() << (boost::format(tr("Donating %s BLUR to The BLUR Project (www.blur.cash / %s ).")) % amount_str % BLUR_DONATION_ADDR).str(); 
-  transfer(local_args);
-  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::accept_loaded_tx(const std::function<size_t()> get_num_txes, const std::function<const tools::wallet2::tx_construction_data&(size_t)> &get_tx, const std::string &extra_message)
@@ -6619,7 +6576,9 @@ bool simple_wallet::address_book(const std::vector<std::string> &args/* = std::v
     {
       if (tools::wallet2::parse_long_payment_id(args[3], payment_id))
       {
-        LONG_PAYMENT_ID_SUPPORT_CHECK();
+    if (!m_long_payment_id_support) {
+      fail_msg_writer() << tr("Long payment IDs are obsolete. Use --long-payment-id-support if you really must use one, and warn the recipient they are using an obsolete feature that will disappear in the future.");
+      return true; }
         description_start += 2;
       }
       else if (tools::wallet2::parse_short_payment_id(args[3], info.payment_id))
@@ -6806,6 +6765,20 @@ bool simple_wallet::wallet_info(const std::vector<std::string> &args)
   message_writer() << tr("Network type: ") << (
     m_wallet->nettype() == cryptonote::TESTNET ? tr("Testnet") :
     m_wallet->nettype() == cryptonote::STAGENET ? tr("Stagenet") : tr("Mainnet"));
+  
+  tools::wallet2::transfer_container transfers;
+  m_wallet->get_transfers(transfers);
+  uint64_t min_height = std::numeric_limits<uint64_t>::max();
+  for (const auto& td : transfers)
+  {
+    if (min_height > td.m_block_height && !td.m_spent)
+      min_height = td.m_block_height;
+  }
+  if(min_height == std::numeric_limits<uint64_t>::max())
+    message_writer() << "Earliest unspent output: N/A";
+  else
+    message_writer() << "Earliest unspent output: " << min_height;
+  
   return true;
 }
 //----------------------------------------------------------------------------------------------------

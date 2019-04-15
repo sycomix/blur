@@ -133,11 +133,6 @@ namespace hw {
       return sec == crypto::null_skey;
     }
 
-    bool operator==(const crypto::key_derivation &d0, const crypto::key_derivation &d1) {
-      static_assert(sizeof(crypto::key_derivation) == 32, "key_derivation must be 32 bytes");
-      return !crypto_verify_32((const unsigned char*)&d0, (const unsigned char*)&d1);
-     }
-
     /* ===================================================================== */
     /* ===                             Device                           ==== */
     /* ===================================================================== */
@@ -1596,7 +1591,7 @@ namespace hw {
         this->exchange();
 
         //pseudoOuts
-        if ((type == rct::RCTTypeSimple) || (type == rct::RCTTypeSimpleBulletproof)) {
+        if ((type == rct::RCTTypeSimple) || (type == rct::RCTTypeBulletproof)) {
           for ( i = 0; i < inputs_size; i++) {
             reset_buffer();
             this->buffer_send[0] = 0x00;
