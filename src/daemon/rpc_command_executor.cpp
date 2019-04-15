@@ -508,7 +508,7 @@ bool t_rpc_command_executor::print_connections() {
      << std::setw(30) << std::left << address
      << std::setw(10) << std::left << in_out
      << std::setw(20) << epee::string_tools::pad_string(info.peer_id, 16, '0', true)
-     << std::setw(10) << info.support_flags
+     << std::setw(20) << info.support_flags
      << std::setw(30) << std::to_string(info.recv_count) + "("  + std::to_string(info.recv_idle_time) + ")/" + std::to_string(info.send_count) + "(" + std::to_string(info.send_idle_time) + ")"
      << std::setw(25) << info.state
      << std::setw(20) << info.live_time
@@ -1040,14 +1040,12 @@ bool t_rpc_command_executor::print_transaction_pool_stats() {
   return true;
 }
 
-bool t_rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype, bool do_background_mining, bool ignore_battery) {
+bool t_rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype) {
   cryptonote::COMMAND_RPC_START_MINING::request req;
   cryptonote::COMMAND_RPC_START_MINING::response res;
   req.miner_address = cryptonote::get_account_address_as_str(nettype, false, address);
   req.threads_count = num_threads;
-  req.do_background_mining = do_background_mining;
-  req.ignore_battery = ignore_battery;
-  
+
   std::string fail_message = "Mining did not start";
 
   if (m_is_rpc)
