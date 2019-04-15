@@ -361,7 +361,7 @@ namespace nodetool
       {
         epee::net_utils::network_address na{epee::net_utils::ipv4_network_address{boost::asio::detail::socket_ops::host_to_network_long(endpoint.address().to_v4().to_ulong()), endpoint.port()}};
         seed_nodes.push_back(na);
-        MINFO("Added seed node: " << na.str());
+        MINFO("Added node: " << na.str());
       }
       else
       {
@@ -1647,7 +1647,7 @@ namespace nodetool
     for(const std::string& pr_str: perrs)
     {
       epee::net_utils::network_address na = AUTO_VAL_INIT(na);
-      const uint16_t default_port = m_nettype == cryptonote::TESTNET ? ::config::testnet::P2P_DEFAULT_PORT : m_nettype == cryptonote::STAGENET ? ::config::stagenet::P2P_DEFAULT_PORT : ::config::P2P_DEFAULT_PORT;
+      const uint16_t default_port = cryptonote::get_config(m_nettype).P2P_DEFAULT_PORT;
       bool r = parse_peer_from_string(na, pr_str, default_port);
       CHECK_AND_ASSERT_MES(r, false, "Failed to parse address from string: " << pr_str);
       container.push_back(na);
